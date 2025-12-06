@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { TeamMember, DayInfo, LeaveDay, CapacityOverride, Holiday } from '../types';
 import { Calendar, ChevronLeft, ChevronRight, X, MapPin, Download } from 'lucide-react';
@@ -67,7 +66,7 @@ const LeaveGrid: React.FC<LeaveGridProps> = ({
 
   const handleExportCSV = () => {
     // 1. Metadata Rows
-    const rows = [
+    const rows: (string | number)[][] = [
       ['Capacity Plan Export'],
       ['Start Date', viewStartDate, 'End Date', viewEndDate],
       [] // Empty row

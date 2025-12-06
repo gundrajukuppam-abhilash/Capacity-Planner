@@ -1,8 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
-import { TeamMember, LeaveDay, CapacityAnalysis, CapacityOverride, Holiday, User } from './types';
+import { TeamMember, LeaveDay, CapacityOverride, Holiday, User } from './types';
 import { getDaysInRange, calculateCapacity, formatDateISO, addDays } from './utils';
-import { analyzeCapacity } from './services/geminiService';
 import SettingsPanel from './components/SettingsPanel';
 import LeaveGrid from './components/LeaveGrid';
 import AnalysisPanel from './components/AnalysisPanel';
@@ -42,8 +41,6 @@ const App: React.FC = () => {
   const [leaves, setLeaves] = useState<LeaveDay[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>(INITIAL_HOLIDAYS);
   const [capacityOverrides, setCapacityOverrides] = useState<CapacityOverride[]>([]);
-  const [analysis, setAnalysis] = useState<CapacityAnalysis | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [hoursPerStoryPoint, setHoursPerStoryPoint] = useState<number>(8);
   
   // View State for Grid
@@ -100,7 +97,6 @@ const App: React.FC = () => {
 
   const handleLogout = () => {
     setCurrentUser(null);
-    setAnalysis(null);
   };
 
   const handleUpdateProfile = (updates: Partial<User>) => {
@@ -165,7 +161,6 @@ const App: React.FC = () => {
           return prev.filter(l => !(l.memberId === memberId && l.date === date));
         }
       });
-      setAnalysis(null);
     } else {
       // Member Mode check
       if (currentTeamMember && memberId !== currentTeamMember.id) {
@@ -192,7 +187,6 @@ const App: React.FC = () => {
         ? prev.map(o => o.memberId === memberId && o.date === date ? { ...o, hours } : o)
         : [...prev, { memberId, date, hours }];
     });
-    setAnalysis(null);
   };
 
   const handleRequestLeave = (data: { memberId: string; date: string; type: 'Full' | 'Half'; reason: string }) => {
@@ -205,17 +199,14 @@ const App: React.FC = () => {
 
   const handleDeleteLeave = (leaveId: string) => {
     setLeaves(prev => prev.filter(l => l.id !== leaveId));
-    setAnalysis(null);
   };
 
   const handleApproveRequest = (leaveId: string) => {
     setLeaves(prev => prev.map(l => l.id === leaveId ? { ...l, status: 'approved' } : l));
-    setAnalysis(null);
   };
 
   const handleRejectRequest = (leaveId: string) => {
     setLeaves(prev => prev.map(l => l.id === leaveId ? { ...l, status: 'rejected' } : l));
-    setAnalysis(null);
   };
 
   const syncUserFromMember = (member: TeamMember) => {
@@ -246,34 +237,28 @@ const App: React.FC = () => {
   const handleAddMember = (member: TeamMember) => {
     setMembers(prev => [...prev, member]);
     syncUserFromMember(member);
-    setAnalysis(null);
   };
 
   const handleImportMembers = (newMembers: TeamMember[]) => {
     setMembers(prev => [...prev, ...newMembers]);
     newMembers.forEach(syncUserFromMember);
-    setAnalysis(null);
   };
 
   const handleUpdateMember = (id: string, updates: Partial<TeamMember>) => {
     setMembers(prev => prev.map(m => m.id === id ? { ...m, ...updates } : m));
-    setAnalysis(null);
   };
 
   const handleRemoveMember = (id: string) => {
     setMembers(members.filter(m => m.id !== id));
     setLeaves(leaves.filter(l => l.memberId !== id)); 
-    setAnalysis(null);
   };
 
   const handleAddHoliday = (holiday: Holiday) => {
       setHolidays([...holidays, holiday]);
-      setAnalysis(null);
   };
 
   const handleRemoveHoliday = (id: string) => {
       setHolidays(holidays.filter(h => h.id !== id));
-      setAnalysis(null);
   };
   
   const handleImportLeaves = (newLeaves: LeaveDay[]) => {
@@ -291,31 +276,6 @@ const App: React.FC = () => {
        
        return [...existing, ...leavesToAdd];
     });
-    setAnalysis(null);
-  };
-
-  const handleAnalyze = async () => {
-    if (!process.env.API_KEY) {
-      alert("API Key is missing from environment.");
-      return;
-    }
-    setIsAnalyzing(true);
-    try {
-      const approvedLeaves = leaves.filter(l => l.status === 'approved');
-      const result = await analyzeCapacity(members, approvedLeaves, "Current View", `${viewDays.length} days`, viewDays, { memberCaps, totalTeamCapacity });
-      setAnalysis({
-        totalCapacity: totalTeamCapacity,
-        memberCapacities: Object.entries(memberCaps).map(([id, hours]) => ({ memberId: id, hours })),
-        risks: result.risks || [],
-        suggestions: result.suggestions || [],
-        summary: result.summary || "Analysis complete."
-      });
-    } catch (error) {
-      console.error(error);
-      alert("Failed to analyze.");
-    } finally {
-      setIsAnalyzing(false);
-    }
   };
 
   // ---- RENDER ----
@@ -411,9 +371,6 @@ const App: React.FC = () => {
               <div className="xl:col-span-1">
                  <AnalysisPanel 
                     totalCapacity={totalTeamCapacity}
-                    analysis={analysis}
-                    isLoading={isAnalyzing}
-                    onAnalyze={handleAnalyze}
                     hoursPerStoryPoint={hoursPerStoryPoint}
                  />
               </div>

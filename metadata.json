@@ -1,0 +1,5 @@
+{
+  "name": "Capacity Planner",
+  "description": "An intelligent sprint capacity planner that integrates leave management with real-time capacity calculations and AI-driven sprint risk analysis.",
+  "requestFramePermissions": []
+}

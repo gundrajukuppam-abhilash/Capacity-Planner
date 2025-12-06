@@ -1,12 +1,23 @@
 
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: 'Manager' | 'Member';
+  status: 'pending' | 'approved' | 'rejected';
+  location?: string;
+  avatarUrl?: string;
+}
 
 export interface TeamMember {
   id: string;
   name: string;
   role: string;
   location: string;
+  email?: string; // Links to User login
   dailyCapacityHours: number; // e.g., 6 hours (after meetings)
   avatarUrl?: string;
+  startDate?: string; // YYYY-MM-DD
 }
 
 export interface LeaveDay {

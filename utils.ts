@@ -59,6 +59,11 @@ export const calculateCapacity = (
     let memberHours = 0;
 
     days.forEach(day => {
+      // 0. Pre-check: No capacity before start date
+      if (member.startDate && day.date < member.startDate) {
+        return;
+      }
+
       // 1. Base Logic: Skip weekends if configured
       if (day.isWeekend && !includeWeekends) return;
 

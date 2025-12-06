@@ -89,6 +89,12 @@ const LeaveGrid: React.FC<LeaveGridProps> = ({
       ];
 
       days.forEach(day => {
+        // Pre-check Start Date
+        if (member.startDate && day.date < member.startDate) {
+          row.push(0);
+          return;
+        }
+
         if (day.isWeekend) {
           row.push(0);
           return;
@@ -285,10 +291,21 @@ const LeaveGrid: React.FC<LeaveGridProps> = ({
                   </div>
                 </td>
                 {days.map((day) => {
+                  const isWeekend = day.isWeekend;
+                  const isBeforeStart = member.startDate && day.date < member.startDate;
+                  
+                  // Pre-Check: Member hasn't started yet
+                  if (isBeforeStart) {
+                     return (
+                        <td key={`${member.id}-${day.date}`} className="border-b border-gray-100 text-center p-1 bg-gray-50">
+                           <span className="text-xs text-gray-300">-</span>
+                        </td>
+                     );
+                  }
+
                   const leave = getLeaveStatus(member.id, day.date);
                   const override = getOverride(member.id, day.date);
                   const holiday = getHoliday(member.location, day.date);
-                  const isWeekend = day.isWeekend;
                   
                   // Base value logic
                   let displayValue = override ? override.hours : member.dailyCapacityHours;

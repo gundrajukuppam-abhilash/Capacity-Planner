@@ -1,14 +1,6 @@
-
-import { GoogleGenAI } from "@google/genai";
 import { TeamMember, LeaveDay, DayInfo } from "../types";
 
-const getClient = () => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    throw new Error("API Key not found");
-  }
-  return new GoogleGenAI({ apiKey });
-};
+const API_URL = 'http://localhost:3000/api/analyze';
 
 export const analyzeCapacity = async (
   members: TeamMember[],
@@ -19,9 +11,7 @@ export const analyzeCapacity = async (
   calculatedCapacity: { memberCaps: Record<string, number>; totalTeamCapacity: number }
 ) => {
   try {
-    const ai = getClient();
-    
-    // Construct a prompt context
+    // Construct the context payload
     const context = {
       planName: viewName,
       duration: viewDuration,
@@ -40,34 +30,21 @@ export const analyzeCapacity = async (
       }))
     };
 
-    const prompt = `
-      Analyze the following capacity plan and provide a JSON response.
-      
-      Context:
-      ${JSON.stringify(context, null, 2)}
-
-      Please identify potential risks (e.g., key roles missing, low capacity for specific roles) 
-      and provide actionable suggestions. Also write a professional summary suitable for a planning meeting.
-
-      Return JSON format ONLY:
-      {
-        "risks": ["string", "string"],
-        "suggestions": ["string", "string"],
-        "summary": "string"
-      }
-    `;
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json'
-      }
+    const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ context })
     });
 
-    return JSON.parse(response.text || "{}");
+    if (!response.ok) {
+        throw new Error(`Backend Error: ${response.statusText}`);
+    }
+
+    return await response.json();
   } catch (error) {
-    console.error("Gemini analysis failed:", error);
+    console.error("Analysis request failed. Ensure the backend server is running at http://localhost:3000", error);
     throw error;
   }
 };

@@ -8,14 +8,18 @@ interface AnalysisPanelProps {
   analysis: CapacityAnalysis | null;
   isLoading: boolean;
   onAnalyze: () => void;
+  hoursPerStoryPoint: number;
 }
 
 const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   totalCapacity,
   analysis,
   isLoading,
-  onAnalyze
+  onAnalyze,
+  hoursPerStoryPoint
 }) => {
+
+  const totalSP = (totalCapacity / (hoursPerStoryPoint || 8)).toFixed(1);
 
   return (
     <div className="space-y-6">
@@ -26,11 +30,17 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
         </div>
         <div className="relative z-10">
           <h2 className="text-indigo-100 font-medium text-sm uppercase tracking-wider mb-1">Total Team Capacity</h2>
-          <div className="flex items-baseline gap-2">
+          <div className="flex items-baseline gap-2 mb-1">
              <span className="text-5xl font-bold tracking-tight">{totalCapacity}</span>
              <span className="text-xl text-indigo-200 font-medium">hours</span>
           </div>
-          <p className="text-indigo-200 text-xs mt-2 opacity-80">Available for this sprint based on current settings.</p>
+          <div className="flex items-center gap-2 text-indigo-100 bg-indigo-500/30 px-2 py-1 rounded inline-block">
+             <span className="font-bold text-lg">≈ {totalSP}</span>
+             <span className="text-xs font-medium uppercase tracking-wide opacity-90">Story Points</span>
+          </div>
+          <p className="text-indigo-200 text-xs mt-3 opacity-80">
+            Available for this sprint based on {hoursPerStoryPoint}h / SP.
+          </p>
         </div>
       </div>
 

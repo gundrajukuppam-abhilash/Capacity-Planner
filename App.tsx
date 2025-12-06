@@ -1,8 +1,7 @@
 
-
-import React, { useState, useMemo, useEffect } from 'react';
-import { TeamMember, LeaveDay, CapacityAnalysis, CapacityOverride } from './types';
-import { getSprintDays, calculateCapacity, formatDateISO } from './utils';
+import React, { useState, useMemo } from 'react';
+import { TeamMember, LeaveDay, CapacityAnalysis, CapacityOverride, Holiday } from './types';
+import { getDaysInRange, calculateCapacity, formatDateISO, addDays } from './utils';
 import { analyzeCapacity } from './services/geminiService';
 import SettingsPanel from './components/SettingsPanel';
 import LeaveGrid from './components/LeaveGrid';
@@ -13,10 +12,16 @@ import MemberDashboard from './components/MemberDashboard';
 import { LayoutDashboard, PlusCircle, UserCog, Users } from 'lucide-react';
 
 const INITIAL_MEMBERS: TeamMember[] = [
-  { id: '1', name: 'Alex Johnson', role: 'Developer', dailyCapacityHours: 6 },
-  { id: '2', name: 'Sam Smith', role: 'Senior Dev', dailyCapacityHours: 6 },
-  { id: '3', name: 'Jordan Lee', role: 'Designer', dailyCapacityHours: 6 },
-  { id: '4', name: 'Casey West', role: 'QA', dailyCapacityHours: 6 },
+  { id: '1', name: 'Alex Johnson', role: 'Developer', location: 'US', dailyCapacityHours: 6 },
+  { id: '2', name: 'Sam Smith', role: 'Senior Dev', location: 'UK', dailyCapacityHours: 6 },
+  { id: '3', name: 'Jordan Lee', role: 'Designer', location: 'US', dailyCapacityHours: 6 },
+  { id: '4', name: 'Casey West', role: 'QA', location: 'India', dailyCapacityHours: 6 },
+];
+
+const INITIAL_HOLIDAYS: Holiday[] = [
+    { id: 'h1', startDate: '2024-12-25', endDate: '2024-12-25', name: 'Christmas Day', locations: ['All'] },
+    { id: 'h2', startDate: '2024-07-04', endDate: '2024-07-04', name: 'Independence Day', locations: ['US'] },
+    { id: 'h3', startDate: '2024-01-26', endDate: '2024-01-26', name: 'Republic Day', locations: ['India'] }
 ];
 
 const App: React.FC = () => {
@@ -25,12 +30,19 @@ const App: React.FC = () => {
   
   const [members, setMembers] = useState<TeamMember[]>(INITIAL_MEMBERS);
   const [leaves, setLeaves] = useState<LeaveDay[]>([]);
+  const [holidays, setHolidays] = useState<Holiday[]>(INITIAL_HOLIDAYS);
   const [capacityOverrides, setCapacityOverrides] = useState<CapacityOverride[]>([]);
   const [analysis, setAnalysis] = useState<CapacityAnalysis | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [hoursPerStoryPoint, setHoursPerStoryPoint] = useState<number>(8);
   
   // View State for Grid
   const [viewStartDate, setViewStartDate] = useState(formatDateISO(new Date()));
+  const [viewEndDate, setViewEndDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 13); // Default 14 days inclusive (0 to 13)
+    return formatDateISO(d);
+  });
 
   // Modal State
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
@@ -38,25 +50,38 @@ const App: React.FC = () => {
 
   // Computed Values
 
-  // View Days: 2 Weeks window based on viewStartDate
-  // Note: calculateCapacity now runs on the visible days, so total capacity reflects the 2-week window.
+  // View Days based on Start and End date
   const viewDays = useMemo(() => {
-    return getSprintDays(viewStartDate, 2);
-  }, [viewStartDate]);
+    // If end date is invalid or before start date, fallback to start date + 13 days
+    if (!viewEndDate || viewEndDate < viewStartDate) {
+       return getDaysInRange(viewStartDate, viewStartDate);
+    }
+    return getDaysInRange(viewStartDate, viewEndDate);
+  }, [viewStartDate, viewEndDate]);
 
   const { memberCaps, totalTeamCapacity } = useMemo(() => {
-    // Pass false for includeWeekends by default as settings were removed
-    return calculateCapacity(members, leaves, capacityOverrides, viewDays, false);
-  }, [members, leaves, capacityOverrides, viewDays]);
+    return calculateCapacity(members, leaves, capacityOverrides, holidays, viewDays, false);
+  }, [members, leaves, capacityOverrides, holidays, viewDays]);
 
   const pendingLeaves = useMemo(() => leaves.filter(l => l.status === 'pending'), [leaves]);
 
   // Handlers
   const handleViewNavigate = (direction: 'prev' | 'next') => {
-    const current = new Date(viewStartDate);
-    const offset = direction === 'next' ? 14 : -14;
-    current.setDate(current.getDate() + offset);
-    setViewStartDate(formatDateISO(current));
+    const start = new Date(viewStartDate);
+    const end = new Date(viewEndDate);
+    
+    // Calculate current duration in ms
+    const durationMs = end.getTime() - start.getTime();
+    // Shift amount = duration + 1 day worth of ms
+    const shiftMs = durationMs + (24 * 60 * 60 * 1000);
+    const offsetDays = Math.round(shiftMs / (24 * 60 * 60 * 1000));
+    const offset = direction === 'next' ? offsetDays : -offsetDays;
+    
+    const newStart = addDays(start, offset);
+    const newEnd = addDays(end, offset);
+    
+    setViewStartDate(formatDateISO(newStart));
+    setViewEndDate(formatDateISO(newEnd));
   };
 
   const handleGridClick = (memberId: string, date: string) => {
@@ -152,6 +177,11 @@ const App: React.FC = () => {
     setAnalysis(null);
   };
 
+  const handleImportMembers = (newMembers: TeamMember[]) => {
+    setMembers(prev => [...prev, ...newMembers]);
+    setAnalysis(null);
+  };
+
   const handleUpdateMember = (id: string, updates: Partial<TeamMember>) => {
     setMembers(prev => prev.map(m => m.id === id ? { ...m, ...updates } : m));
     setAnalysis(null);
@@ -161,6 +191,16 @@ const App: React.FC = () => {
     setMembers(members.filter(m => m.id !== id));
     setLeaves(leaves.filter(l => l.memberId !== id)); 
     setAnalysis(null);
+  };
+
+  const handleAddHoliday = (holiday: Holiday) => {
+      setHolidays([...holidays, holiday]);
+      setAnalysis(null);
+  };
+
+  const handleRemoveHoliday = (id: string) => {
+      setHolidays(holidays.filter(h => h.id !== id));
+      setAnalysis(null);
   };
 
   const handleAnalyze = async () => {
@@ -176,7 +216,7 @@ const App: React.FC = () => {
         members, 
         approvedLeaves,
         "Current Capacity View",
-        "2 weeks",
+        `${viewDays.length} days`,
         viewDays, 
         { memberCaps, totalTeamCapacity }
       );
@@ -250,8 +290,15 @@ const App: React.FC = () => {
           <>
             <SettingsPanel 
               members={members}
+              holidays={holidays}
               onAddMember={handleAddMember}
+              onUpdateMember={handleUpdateMember}
+              onImportMembers={handleImportMembers}
               onRemoveMember={handleRemoveMember}
+              onAddHoliday={handleAddHoliday}
+              onRemoveHoliday={handleRemoveHoliday}
+              hoursPerStoryPoint={hoursPerStoryPoint}
+              onUpdateHoursPerSP={setHoursPerStoryPoint}
             />
 
             <ApprovalQueue 
@@ -268,14 +315,17 @@ const App: React.FC = () => {
                   days={viewDays} 
                   leaves={leaves} 
                   overrides={capacityOverrides}
+                  holidays={holidays}
                   onToggleLeave={handleGridClick}
                   onUpdateMember={handleUpdateMember}
                   onCapacityUpdate={handleCapacityUpdate}
                   capacityData={memberCaps}
                   isManager={true}
                   viewStartDate={viewStartDate}
+                  viewEndDate={viewEndDate}
                   onNavigate={handleViewNavigate}
                   onDateSelect={setViewStartDate}
+                  onEndDateSelect={setViewEndDate}
                 />
               </div>
               
@@ -285,6 +335,7 @@ const App: React.FC = () => {
                     analysis={analysis}
                     isLoading={isAnalyzing}
                     onAnalyze={handleAnalyze}
+                    hoursPerStoryPoint={hoursPerStoryPoint}
                  />
               </div>
             </div>

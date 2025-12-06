@@ -4,6 +4,7 @@ export interface TeamMember {
   id: string;
   name: string;
   role: string;
+  location: string;
   dailyCapacityHours: number; // e.g., 6 hours (after meetings)
   avatarUrl?: string;
 }
@@ -23,11 +24,12 @@ export interface CapacityOverride {
   hours: number;
 }
 
-export interface SprintSettings {
+export interface Holiday {
+  id: string;
   startDate: string; // YYYY-MM-DD
-  durationWeeks: number;
-  sprintName: string;
-  includeWeekends: boolean;
+  endDate: string;   // YYYY-MM-DD
+  name: string;
+  locations: string[]; // ['All'] or ['US', 'UK']
 }
 
 export interface DayInfo {

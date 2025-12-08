@@ -43,6 +43,18 @@ export interface Holiday {
   locations: string[]; // ['All'] or ['US', 'UK']
 }
 
+export interface Sprint {
+  id: string;
+  name: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string;   // YYYY-MM-DD
+}
+
+export interface SprintMetric extends Sprint {
+  totalHours: number;
+  totalSP: number;
+}
+
 export interface DayInfo {
   date: string; // YYYY-MM-DD
   isWeekend: boolean;

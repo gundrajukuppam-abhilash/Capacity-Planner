@@ -1,6 +1,6 @@
 
-import React, { useState, useMemo } from 'react';
-import { TeamMember, LeaveDay, CapacityOverride, Holiday, User } from './types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { TeamMember, LeaveDay, CapacityOverride, Holiday, User, Sprint, SprintMetric } from './types';
 import { getDaysInRange, calculateCapacity, formatDateISO, addDays } from './utils';
 import SettingsPanel from './components/SettingsPanel';
 import LeaveGrid from './components/LeaveGrid';
@@ -31,19 +31,34 @@ const INITIAL_USERS: User[] = [
   { id: 'u2', name: 'Buddy', email: 'buddy@sprintsync.com', role: 'Member', status: 'approved', location: 'Gurgaon', avatarUrl: 'https://ui-avatars.com/api/?name=Buddy&background=random' }
 ];
 
+// Helper for LocalStorage
+const useStickyState = <T,>(key: string, defaultValue: T): [T, React.Dispatch<React.SetStateAction<T>>] => {
+  const [value, setValue] = useState<T>(() => {
+    const stickyValue = window.localStorage.getItem(key);
+    return stickyValue !== null ? JSON.parse(stickyValue) : defaultValue;
+  });
+
+  useEffect(() => {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  }, [key, value]);
+
+  return [value, setValue];
+};
+
 const App: React.FC = () => {
   // Auth State
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [allUsers, setAllUsers] = useState<User[]>(INITIAL_USERS);
+  const [currentUser, setCurrentUser] = useStickyState<User | null>('sprintsync_currentUser', null);
+  const [allUsers, setAllUsers] = useStickyState<User[]>('sprintsync_users', INITIAL_USERS);
 
-  // App Data State
-  const [members, setMembers] = useState<TeamMember[]>(INITIAL_MEMBERS);
-  const [leaves, setLeaves] = useState<LeaveDay[]>([]);
-  const [holidays, setHolidays] = useState<Holiday[]>(INITIAL_HOLIDAYS);
-  const [capacityOverrides, setCapacityOverrides] = useState<CapacityOverride[]>([]);
-  const [hoursPerStoryPoint, setHoursPerStoryPoint] = useState<number>(8);
+  // App Data State (Persistent)
+  const [members, setMembers] = useStickyState<TeamMember[]>('sprintsync_members', INITIAL_MEMBERS);
+  const [leaves, setLeaves] = useStickyState<LeaveDay[]>('sprintsync_leaves', []);
+  const [holidays, setHolidays] = useStickyState<Holiday[]>('sprintsync_holidays', INITIAL_HOLIDAYS);
+  const [capacityOverrides, setCapacityOverrides] = useStickyState<CapacityOverride[]>('sprintsync_overrides', []);
+  const [hoursPerStoryPoint, setHoursPerStoryPoint] = useStickyState<number>('sprintsync_hsp', 8);
+  const [sprints, setSprints] = useStickyState<Sprint[]>('sprintsync_sprints', []);
   
-  // View State for Grid
+  // View State for Grid (Session only)
   const [viewStartDate, setViewStartDate] = useState(formatDateISO(new Date()));
   const [viewEndDate, setViewEndDate] = useState(() => {
     const d = new Date();
@@ -75,6 +90,19 @@ const App: React.FC = () => {
   const { memberCaps, totalTeamCapacity } = useMemo(() => {
     return calculateCapacity(members, leaves, capacityOverrides, holidays, viewDays, false);
   }, [members, leaves, capacityOverrides, holidays, viewDays]);
+
+  // Calculate Metrics for EACH defined sprint (for AnalysisPanel)
+  const sprintMetrics = useMemo((): SprintMetric[] => {
+    return sprints.map(sprint => {
+       const sprintDays = getDaysInRange(sprint.startDate, sprint.endDate);
+       const cap = calculateCapacity(members, leaves, capacityOverrides, holidays, sprintDays, false);
+       return {
+          ...sprint,
+          totalHours: cap.totalTeamCapacity,
+          totalSP: cap.totalTeamCapacity / (hoursPerStoryPoint || 8)
+       };
+    }).sort((a,b) => a.startDate.localeCompare(b.startDate));
+  }, [sprints, members, leaves, capacityOverrides, holidays, hoursPerStoryPoint]);
 
   const pendingLeaves = useMemo(() => leaves.filter(l => l.status === 'pending'), [leaves]);
 
@@ -278,6 +306,71 @@ const App: React.FC = () => {
     });
   };
 
+  const handleAddSprint = (sprint: Sprint) => {
+      setSprints(prev => [...prev, sprint]);
+      // Optional: Auto switch view to new sprint?
+      // setViewStartDate(sprint.startDate);
+      // setViewEndDate(sprint.endDate);
+  };
+
+  const handleRemoveSprint = (id: string) => {
+      setSprints(prev => prev.filter(s => s.id !== id));
+  };
+
+  // Workspace Management
+  const handleExportWorkspace = () => {
+     const data = {
+         members,
+         leaves,
+         holidays,
+         capacityOverrides,
+         hoursPerStoryPoint,
+         sprints,
+         users: allUsers // Backup users too? Might be sensitive if sharing file.
+     };
+     const jsonString = JSON.stringify(data, null, 2);
+     const blob = new Blob([jsonString], { type: 'application/json' });
+     const url = URL.createObjectURL(blob);
+     const link = document.createElement('a');
+     link.href = url;
+     link.download = `sprintsync_workspace_${new Date().toISOString().split('T')[0]}.json`;
+     document.body.appendChild(link);
+     link.click();
+     document.body.removeChild(link);
+  };
+
+  const handleImportWorkspace = async (file: File) => {
+     try {
+         const text = await file.text();
+         const data = JSON.parse(text);
+         
+         if (confirm("This will overwrite your current workspace. Continue?")) {
+             if(data.members) setMembers(data.members);
+             if(data.leaves) setLeaves(data.leaves);
+             if(data.holidays) setHolidays(data.holidays);
+             if(data.capacityOverrides) setCapacityOverrides(data.capacityOverrides);
+             if(data.hoursPerStoryPoint) setHoursPerStoryPoint(data.hoursPerStoryPoint);
+             if(data.sprints) setSprints(data.sprints);
+             // if(data.users) setAllUsers(data.users); // Decide if we want to restore users
+         }
+     } catch (e) {
+         alert("Failed to import workspace. Invalid JSON file.");
+         console.error(e);
+     }
+  };
+
+  const handleResetWorkspace = () => {
+      if (confirm("Are you sure you want to reset everything? This cannot be undone.")) {
+          setMembers(INITIAL_MEMBERS);
+          setLeaves([]);
+          setHolidays(INITIAL_HOLIDAYS);
+          setCapacityOverrides([]);
+          setHoursPerStoryPoint(8);
+          setSprints([]);
+          // Keep users/auth intact usually
+      }
+  };
+
   // ---- RENDER ----
 
   if (!currentUser) {
@@ -333,18 +426,24 @@ const App: React.FC = () => {
             <SettingsPanel 
               members={members}
               holidays={holidays}
+              sprints={sprints}
               onAddMember={handleAddMember}
               onUpdateMember={handleUpdateMember}
               onImportMembers={handleImportMembers}
               onRemoveMember={handleRemoveMember}
               onAddHoliday={handleAddHoliday}
               onRemoveHoliday={handleRemoveHoliday}
+              onAddSprint={handleAddSprint}
+              onRemoveSprint={handleRemoveSprint}
               hoursPerStoryPoint={hoursPerStoryPoint}
               onUpdateHoursPerSP={setHoursPerStoryPoint}
               pendingLeaves={pendingLeaves}
               onApproveLeave={handleApproveRequest}
               onRejectLeave={handleRejectRequest}
               onImportLeaves={handleImportLeaves}
+              onExportWorkspace={handleExportWorkspace}
+              onImportWorkspace={handleImportWorkspace}
+              onResetWorkspace={handleResetWorkspace}
             />
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
@@ -355,6 +454,7 @@ const App: React.FC = () => {
                   leaves={leaves} 
                   overrides={capacityOverrides}
                   holidays={holidays}
+                  sprints={sprints}
                   onToggleLeave={handleGridClick}
                   onUpdateMember={handleUpdateMember}
                   onCapacityUpdate={handleCapacityUpdate}
@@ -372,6 +472,7 @@ const App: React.FC = () => {
                  <AnalysisPanel 
                     totalCapacity={totalTeamCapacity}
                     hoursPerStoryPoint={hoursPerStoryPoint}
+                    sprintMetrics={sprintMetrics}
                  />
               </div>
             </div>

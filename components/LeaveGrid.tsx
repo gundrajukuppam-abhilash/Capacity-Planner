@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { TeamMember, DayInfo, LeaveDay, CapacityOverride, Holiday } from '../types';
+import { TeamMember, DayInfo, LeaveDay, CapacityOverride, Holiday, Sprint } from '../types';
 import { Calendar, ChevronLeft, ChevronRight, X, MapPin, Download } from 'lucide-react';
 
 interface LeaveGridProps {
@@ -8,6 +9,7 @@ interface LeaveGridProps {
   leaves: LeaveDay[];
   overrides: CapacityOverride[];
   holidays: Holiday[];
+  sprints: Sprint[];
   onToggleLeave: (memberId: string, date: string) => void;
   onUpdateMember: (id: string, updates: Partial<TeamMember>) => void;
   onCapacityUpdate: (memberId: string, date: string, hours: number) => void;
@@ -26,6 +28,7 @@ const LeaveGrid: React.FC<LeaveGridProps> = ({
   leaves, 
   overrides,
   holidays,
+  sprints,
   onToggleLeave,
   onUpdateMember,
   onCapacityUpdate,
@@ -55,6 +58,13 @@ const LeaveGrid: React.FC<LeaveGridProps> = ({
      );
   };
 
+  // Identify Current Sprint based on View Range
+  const currentSprint = sprints.find(s => 
+     (viewStartDate >= s.startDate && viewStartDate <= s.endDate) || 
+     (viewEndDate >= s.startDate && viewEndDate <= s.endDate) ||
+     (viewStartDate <= s.startDate && viewEndDate >= s.endDate)
+  );
+
   // Helper to format YYYY-MM-DD to MM/DD/YYYY for display without timezone issues
   const formatDateDisplay = (isoDate: string) => {
     if (!isoDate) return '-';
@@ -69,13 +79,14 @@ const LeaveGrid: React.FC<LeaveGridProps> = ({
     const rows: (string | number)[][] = [
       ['Capacity Plan Export'],
       ['Start Date', viewStartDate, 'End Date', viewEndDate],
+      currentSprint ? ['Sprint', currentSprint.name] : [],
       [] // Empty row
     ];
 
     // 2. Header Row
     const headers = ['Team Member', 'Role', 'Location', 'Base Daily Cap'];
     days.forEach(day => headers.push(day.displayDate));
-    headers.push('Total Capacity');
+    headers.push(currentSprint ? `${currentSprint.name} Capacity` : 'Total Capacity');
     rows.push(headers);
 
     // 3. Data Rows
@@ -224,6 +235,20 @@ const LeaveGrid: React.FC<LeaveGridProps> = ({
       <div className="overflow-x-auto hide-scrollbar">
         <table className="w-full text-sm text-left border-collapse">
           <thead>
+            {/* SPRINT HEADER ROW */}
+            {currentSprint && (
+              <tr>
+                 <th className="p-2 bg-indigo-50/50 border-b border-r border-indigo-100 text-indigo-700 font-semibold sticky left-0 z-10">
+                    {currentSprint.name}
+                 </th>
+                 <th className="p-2 bg-indigo-50/50 border-b border-indigo-100"></th>
+                 <th colSpan={days.length} className="p-2 bg-indigo-50/50 border-b border-indigo-100 text-center text-xs text-indigo-600 font-medium">
+                    {formatDateDisplay(currentSprint.startDate)} - {formatDateDisplay(currentSprint.endDate)}
+                 </th>
+                 <th className="p-2 bg-indigo-50/50 border-b border-l border-indigo-100 sticky right-0 z-10"></th>
+              </tr>
+            )}
+            
             <tr>
               <th className="p-4 bg-gray-50 border-b border-r border-gray-200 min-w-[200px] sticky left-0 z-10 shadow-sm">
                 Team Member
@@ -238,7 +263,12 @@ const LeaveGrid: React.FC<LeaveGridProps> = ({
                 </th>
               ))}
               <th className="p-4 bg-gray-50 border-b border-l border-gray-200 text-center min-w-[140px] sticky right-0 z-10 shadow-sm">
-                Member Capacity
+                {currentSprint ? (
+                   <div className="flex flex-col">
+                      <span>{currentSprint.name}</span>
+                      <span className="text-[10px] font-normal text-gray-500">Capacity</span>
+                   </div>
+                ) : 'Member Capacity'}
               </th>
             </tr>
           </thead>

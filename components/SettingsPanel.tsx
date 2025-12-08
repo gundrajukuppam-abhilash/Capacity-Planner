@@ -1,23 +1,29 @@
 
 import React, { useState, useRef } from 'react';
-import { TeamMember, Holiday, LeaveDay } from '../types';
-import { Plus, Trash2, Users, Upload, X, FileText, Download, FileSpreadsheet, MapPin, Calendar, Globe, Pencil, Check, Settings, Calculator, ChevronDown, Mail, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { TeamMember, Holiday, LeaveDay, Sprint } from '../types';
+import { Plus, Trash2, Users, Upload, X, FileText, Download, FileSpreadsheet, MapPin, Calendar, Globe, Pencil, Check, Settings, Calculator, ChevronDown, Mail, Clock, CheckCircle, XCircle, Timer, Save, RefreshCw } from 'lucide-react';
 
 interface SettingsPanelProps {
   members: TeamMember[];
   holidays: Holiday[];
+  sprints: Sprint[];
   onAddMember: (member: TeamMember) => void;
   onUpdateMember: (id: string, updates: Partial<TeamMember>) => void;
   onImportMembers: (members: TeamMember[]) => void;
   onRemoveMember: (id: string) => void;
   onAddHoliday: (holiday: Holiday) => void;
   onRemoveHoliday: (id: string) => void;
+  onAddSprint: (sprint: Sprint) => void;
+  onRemoveSprint: (id: string) => void;
   hoursPerStoryPoint: number;
   onUpdateHoursPerSP: (value: number) => void;
   pendingLeaves: LeaveDay[];
   onApproveLeave: (leaveId: string) => void;
   onRejectLeave: (leaveId: string) => void;
   onImportLeaves: (leaves: LeaveDay[]) => void;
+  onExportWorkspace: () => void;
+  onImportWorkspace: (file: File) => void;
+  onResetWorkspace: () => void;
 }
 
 const LOCATIONS = ['Bangalore', 'Hyderabad', 'Pune', 'Mumbai', 'Gurgaon', 'Kolkata'];
@@ -25,18 +31,24 @@ const LOCATIONS = ['Bangalore', 'Hyderabad', 'Pune', 'Mumbai', 'Gurgaon', 'Kolka
 const SettingsPanel: React.FC<SettingsPanelProps> = ({
   members,
   holidays,
+  sprints,
   onAddMember,
   onUpdateMember,
   onImportMembers,
   onRemoveMember,
   onAddHoliday,
   onRemoveHoliday,
+  onAddSprint,
+  onRemoveSprint,
   hoursPerStoryPoint,
   onUpdateHoursPerSP,
   pendingLeaves,
   onApproveLeave,
   onRejectLeave,
-  onImportLeaves
+  onImportLeaves,
+  onExportWorkspace,
+  onImportWorkspace,
+  onResetWorkspace
 }) => {
   const [activeTab, setActiveTab] = useState<'team' | 'requests' | 'holidays' | 'config'>('team');
 
@@ -55,6 +67,11 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const [newHolidayEndDate, setNewHolidayEndDate] = useState('');
   const [newHolidayLocations, setNewHolidayLocations] = useState('All');
 
+  // Sprint State
+  const [newSprintName, setNewSprintName] = useState('');
+  const [newSprintStart, setNewSprintStart] = useState('');
+  const [newSprintEnd, setNewSprintEnd] = useState('');
+
   // Import Member Modal State
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -64,6 +81,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const [isLeaveImportOpen, setIsLeaveImportOpen] = useState(false);
   const [leaveImportFile, setLeaveImportFile] = useState<File | null>(null);
   const leaveFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Workspace Import
+  const workspaceInputRef = useRef<HTMLInputElement>(null);
 
   const resetMemberForm = () => {
     setEditingMemberId(null);
@@ -137,6 +157,26 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     setNewHolidayLocations('All');
   };
 
+  const handleAddSprint = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSprintName || !newSprintStart || !newSprintEnd) return;
+    if (newSprintEnd < newSprintStart) {
+        alert("Sprint End Date cannot be before Start Date");
+        return;
+    }
+
+    onAddSprint({
+        id: crypto.randomUUID(),
+        name: newSprintName,
+        startDate: newSprintStart,
+        endDate: newSprintEnd
+    });
+
+    setNewSprintName('');
+    setNewSprintStart('');
+    setNewSprintEnd('');
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setImportFile(e.target.files[0]);
@@ -146,6 +186,14 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const handleLeaveFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setLeaveImportFile(e.target.files[0]);
+    }
+  };
+
+  const handleWorkspaceFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      onImportWorkspace(e.target.files[0]);
+      // Reset input
+      e.target.value = '';
     }
   };
 
@@ -327,6 +375,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
       <div className="p-6">
         {activeTab === 'team' && (
           <div className="animate-fadeIn">
+            {/* ... Team Content ... */}
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-800">Team Roster</h3>
               <button 
@@ -429,7 +478,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                  )}
               </div>
             </form>
-
+            {/* Member List */}
             <div className="max-h-[300px] overflow-y-auto space-y-2 pr-2 custom-scroll">
               {members.map(member => (
                 <div key={member.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-md border border-gray-100 hover:border-gray-200 transition-colors">
@@ -481,6 +530,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
         {activeTab === 'requests' && (
            <div className="animate-fadeIn">
+              {/* Requests Tab Content */}
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                    Pending Leave Requests
@@ -549,6 +599,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
         {activeTab === 'holidays' && (
            <div className="animate-fadeIn">
+              {/* Holidays Tab Content */}
               <h3 className="text-lg font-semibold text-gray-800 mb-4">Holiday Calendar</h3>
               
               <form onSubmit={handleAddHoliday} className="grid grid-cols-1 sm:grid-cols-12 gap-2 mb-4 bg-indigo-50/50 p-3 rounded-lg border border-indigo-100">
@@ -589,14 +640,20 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                    </div>
                 </div>
                 <div className="sm:col-span-3">
-                  <input
-                    type="text"
-                    placeholder="Locations (e.g. Bangalore, Mumbai)"
-                    value={newHolidayLocations}
-                    onChange={(e) => setNewHolidayLocations(e.target.value)}
-                    className="w-full rounded-md border-gray-300 border p-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                    title="e.g. Bangalore, Mumbai or All"
-                  />
+                   <div className="relative">
+                     <MapPin className="w-4 h-4 absolute left-2.5 top-2.5 text-gray-400 pointer-events-none" />
+                     <select
+                        value={newHolidayLocations}
+                        onChange={(e) => setNewHolidayLocations(e.target.value)}
+                        className="w-full rounded-md border-gray-300 border p-2 pl-8 pr-8 text-sm focus:ring-2 focus:ring-indigo-500 outline-none appearance-none bg-white text-gray-900 cursor-pointer"
+                     >
+                        <option value="All" className="text-gray-900 bg-white">All Locations</option>
+                        {LOCATIONS.map(loc => (
+                            <option key={loc} value={loc} className="text-gray-900 bg-white">{loc}</option>
+                        ))}
+                     </select>
+                     <ChevronDown className="w-4 h-4 absolute right-2.5 top-2.5 text-gray-400 pointer-events-none" />
+                   </div>
                 </div>
                 <div className="sm:col-span-2">
                    <button type="submit" className="w-full bg-indigo-600 text-white p-2 rounded-md hover:bg-indigo-700 shadow-sm transition-colors flex items-center justify-center gap-1 h-full">
@@ -640,8 +697,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
         )}
 
         {activeTab === 'config' && (
-          <div className="animate-fadeIn">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Metric Configuration</h3>
+          <div className="animate-fadeIn space-y-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">Metric Configuration</h3>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                <div className="bg-indigo-50/50 p-6 rounded-lg border border-indigo-100">
@@ -671,12 +728,131 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                      </div>
                   </div>
                </div>
+
+               {/* Sprint Configuration */}
+               <div className="bg-white p-6 rounded-lg border border-gray-200">
+                   <div className="flex items-center gap-2 mb-4 text-gray-700">
+                       <Timer className="w-5 h-5" />
+                       <h4 className="font-medium">Sprint Configuration</h4>
+                   </div>
+
+                   <form onSubmit={handleAddSprint} className="space-y-3">
+                       <div>
+                           <input 
+                             type="text" 
+                             placeholder="Sprint Name (e.g., Sprint 24)"
+                             value={newSprintName}
+                             onChange={(e) => setNewSprintName(e.target.value)}
+                             className="w-full rounded-md border-gray-300 border p-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                             required
+                           />
+                       </div>
+                       <div className="grid grid-cols-2 gap-2">
+                          <div className="relative">
+                              <span className="absolute -top-1.5 left-2 bg-white px-1 text-[9px] text-gray-400">Start Date</span>
+                              <input 
+                                type="date"
+                                value={newSprintStart}
+                                onChange={(e) => {
+                                    setNewSprintStart(e.target.value);
+                                    if(!newSprintEnd) setNewSprintEnd(e.target.value);
+                                }}
+                                className="w-full rounded-md border-gray-300 border p-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                                required
+                              />
+                          </div>
+                          <div className="relative">
+                              <span className="absolute -top-1.5 left-2 bg-white px-1 text-[9px] text-gray-400">End Date</span>
+                              <input 
+                                type="date"
+                                value={newSprintEnd}
+                                onChange={(e) => setNewSprintEnd(e.target.value)}
+                                min={newSprintStart}
+                                className="w-full rounded-md border-gray-300 border p-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                                required
+                              />
+                          </div>
+                       </div>
+                       <button type="submit" className="w-full bg-indigo-600 text-white p-2 rounded-md hover:bg-indigo-700 shadow-sm transition-colors text-sm font-medium flex items-center justify-center gap-2">
+                           <Plus className="w-4 h-4" /> Add Sprint
+                       </button>
+                   </form>
+
+                   <div className="mt-4 space-y-2 max-h-[150px] overflow-y-auto custom-scroll pr-1">
+                       {sprints.map(sprint => (
+                           <div key={sprint.id} className="flex justify-between items-center p-2 bg-gray-50 rounded border border-gray-100 text-sm">
+                               <div>
+                                   <div className="font-medium text-gray-800">{sprint.name}</div>
+                                   <div className="text-xs text-gray-500">{formatDateDisplay(sprint.startDate)} - {formatDateDisplay(sprint.endDate)}</div>
+                               </div>
+                               <button onClick={() => onRemoveSprint(sprint.id)} className="text-gray-400 hover:text-red-500">
+                                   <Trash2 className="w-4 h-4" />
+                               </button>
+                           </div>
+                       ))}
+                       {sprints.length === 0 && (
+                           <p className="text-xs text-gray-400 italic text-center">No sprints configured.</p>
+                       )}
+                   </div>
+               </div>
+            </div>
+
+            {/* Workspace Management */}
+            <h3 className="text-lg font-semibold text-gray-800 mb-2 mt-8">Workspace Management</h3>
+            <div className="bg-white p-6 rounded-lg border border-gray-200">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                     <div className="flex flex-col gap-2">
+                        <h5 className="font-medium text-sm text-gray-700 flex items-center gap-2">
+                           <Save className="w-4 h-4" /> Export Data
+                        </h5>
+                        <p className="text-xs text-gray-500 mb-2">Save your current workspace to a file.</p>
+                        <button 
+                           onClick={onExportWorkspace}
+                           className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md text-sm hover:bg-gray-50 transition-colors"
+                        >
+                           <Download className="w-4 h-4" /> Export JSON
+                        </button>
+                     </div>
+                     
+                     <div className="flex flex-col gap-2">
+                        <h5 className="font-medium text-sm text-gray-700 flex items-center gap-2">
+                           <Upload className="w-4 h-4" /> Import Data
+                        </h5>
+                        <p className="text-xs text-gray-500 mb-2">Restore workspace from a JSON file.</p>
+                        <button 
+                           onClick={() => workspaceInputRef.current?.click()}
+                           className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md text-sm hover:bg-gray-50 transition-colors"
+                        >
+                           <Upload className="w-4 h-4" /> Import JSON
+                        </button>
+                        <input 
+                           type="file" 
+                           accept=".json" 
+                           ref={workspaceInputRef} 
+                           onChange={handleWorkspaceFileChange}
+                           className="hidden" 
+                        />
+                     </div>
+
+                     <div className="flex flex-col gap-2">
+                        <h5 className="font-medium text-sm text-red-700 flex items-center gap-2">
+                           <RefreshCw className="w-4 h-4" /> Reset
+                        </h5>
+                        <p className="text-xs text-gray-500 mb-2">Clear all data and return to defaults.</p>
+                        <button 
+                           onClick={onResetWorkspace}
+                           className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-red-200 text-red-600 rounded-md text-sm hover:bg-red-50 transition-colors"
+                        >
+                           <Trash2 className="w-4 h-4" /> Reset All
+                        </button>
+                     </div>
+                </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* Member Import Modal */}
+      {/* Import Modals ... (Existing Modals remain unchanged) ... */}
       {isImportOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
